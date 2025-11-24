@@ -32,11 +32,45 @@ async function checkRateLimit(ip: string, kv: KVNamespace): Promise<{ allowed: b
   return { allowed: true, remaining: RATE_LIMIT - count - 1 }
 }
 
+// CORS 头部配置
+function getCorsHeaders(origin: string | null): HeadersInit {
+  // 允许的源列表（包括本地开发环境）
+  const allowedOrigins = [
+    'http://127.0.0.1:5500',
+    'http://localhost:5500',
+    'http://127.0.0.1:3000',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://localhost:5173',
+    'http://127.0.0.1:8080',
+    'http://localhost:8080'
+  ]
+
+  // 检查请求来源是否在允许列表中
+  const allowedOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400'
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env) {
     const startTime = Date.now()
     const ip = getClientIP(request)
     const url = new URL(request.url)
+    const origin = request.headers.get('Origin')
+
+    // 处理 OPTIONS 预检请求
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: getCorsHeaders(origin)
+      })
+    }
 
     try {
       console.log(`[请求开始] IP: ${ip}, Path: ${url.pathname}, Query: ${url.search}`)
@@ -56,6 +90,7 @@ export default {
         }), {
           status: 429,
           headers: {
+            ...getCorsHeaders(origin),
             'Content-Type': 'application/json',
             'Retry-After': String(RATE_LIMIT_WINDOW),
             'X-RateLimit-Limit': String(RATE_LIMIT),
@@ -73,7 +108,10 @@ export default {
       const resp = await fetch(apiUrl)
       if (!resp.ok) {
         console.error(`[API错误] 天气API返回: ${resp.status}`)
-        return new Response(`Weather API Error: ${resp.status}`, { status: 502 })
+        return new Response(`Weather API Error: ${resp.status}`, {
+          status: 502,
+          headers: getCorsHeaders(origin)
+        })
       }
 
       const data = await resp.json()
@@ -84,6 +122,7 @@ export default {
       // 返回 JSON 给前端
       return new Response(JSON.stringify(data), {
         headers: {
+          ...getCorsHeaders(origin),
           'Content-Type': 'application/json',
           'X-RateLimit-Limit': String(RATE_LIMIT),
           'X-RateLimit-Remaining': String(remaining)
@@ -91,7 +130,10 @@ export default {
       })
     } catch (err) {
       console.error(`[异常] IP: ${ip}, 错误: ${err}`)
-      return new Response(`Internal Error: ${err}`, { status: 500 })
+      return new Response(`Internal Error: ${err}`, {
+        status: 500,
+        headers: getCorsHeaders(origin)
+      })
     }
   }
 }

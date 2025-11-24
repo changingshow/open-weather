@@ -4,7 +4,7 @@ export interface Env {
 }
 
 // 限流配置
-const RATE_LIMIT = 10
+const RATE_LIMIT = 30
 const RATE_LIMIT_WINDOW = 60
 
 // 获取客户端 IP

@@ -33,7 +33,7 @@ async function checkRateLimit(ip: string, kv: KVNamespace): Promise<{ allowed: b
 }
 
 // CORS 头部配置
-function getCorsHeaders(origin: string | null): HeadersInit {
+function getCorsHeaders(origin: string | null): Record<string, string> {
   // 允许的源列表（包括本地开发环境）
   const allowedOrigins = [
     'http://127.0.0.1:5500',
@@ -46,8 +46,8 @@ function getCorsHeaders(origin: string | null): HeadersInit {
     'http://localhost:8080'
   ]
 
-  // 检查请求来源是否在允许列表中
-  const allowedOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
+  // 检查请求来源是否在允许列表中，如果没有匹配则使用通配符（开发环境）
+  const allowedOrigin = origin && allowedOrigins.includes(origin) ? origin : '*'
 
   return {
     'Access-Control-Allow-Origin': allowedOrigin,
@@ -75,6 +75,20 @@ export default {
     try {
       console.log(`[请求开始] IP: ${ip}, Path: ${url.pathname}, Query: ${url.search}`)
 
+      // 检查必要的环境变量
+      if (!env.WEATHER_API_KEY) {
+        console.error('[配置错误] WEATHER_API_KEY 未设置')
+        return new Response(JSON.stringify({
+          error: '服务器配置错误：缺少 API Key'
+        }), {
+          status: 500,
+          headers: {
+            ...getCorsHeaders(origin),
+            'Content-Type': 'application/json'
+          }
+        })
+      }
+
       // 测试 KV 读取
       const testValue = await env.RATE_LIMIT_KV.get('abc')
       console.log(`[KV测试] key=abc, value=${testValue}`)
@@ -84,13 +98,14 @@ export default {
 
       if (!allowed) {
         console.warn(`[限流触发] IP: ${ip} 已被限流`)
+        const corsHeaders = getCorsHeaders(origin)
         return new Response(JSON.stringify({
           error: '请求过于频繁，请稍后再试',
           retryAfter: RATE_LIMIT_WINDOW
         }), {
           status: 429,
           headers: {
-            ...getCorsHeaders(origin),
+            ...corsHeaders,
             'Content-Type': 'application/json',
             'Retry-After': String(RATE_LIMIT_WINDOW),
             'X-RateLimit-Limit': String(RATE_LIMIT),
@@ -108,9 +123,15 @@ export default {
       const resp = await fetch(apiUrl)
       if (!resp.ok) {
         console.error(`[API错误] 天气API返回: ${resp.status}`)
-        return new Response(`Weather API Error: ${resp.status}`, {
+        return new Response(JSON.stringify({
+          error: '天气API请求失败',
+          status: resp.status
+        }), {
           status: 502,
-          headers: getCorsHeaders(origin)
+          headers: {
+            ...getCorsHeaders(origin),
+            'Content-Type': 'application/json'
+          }
         })
       }
 
@@ -120,19 +141,27 @@ export default {
       console.log(`[请求完成] IP: ${ip}, 城市: ${city}, 耗时: ${duration}ms`)
 
       // 返回 JSON 给前端
+      const corsHeaders = getCorsHeaders(origin)
       return new Response(JSON.stringify(data), {
         headers: {
-          ...getCorsHeaders(origin),
+          ...corsHeaders,
           'Content-Type': 'application/json',
           'X-RateLimit-Limit': String(RATE_LIMIT),
           'X-RateLimit-Remaining': String(remaining)
         }
       })
     } catch (err) {
-      console.error(`[异常] IP: ${ip}, 错误: ${err}`)
-      return new Response(`Internal Error: ${err}`, {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.error(`[异常] IP: ${ip}, 错误: ${errorMessage}`)
+      return new Response(JSON.stringify({
+        error: '服务器内部错误',
+        message: errorMessage
+      }), {
         status: 500,
-        headers: getCorsHeaders(origin)
+        headers: {
+          ...getCorsHeaders(origin),
+          'Content-Type': 'application/json'
+        }
       })
     }
   }

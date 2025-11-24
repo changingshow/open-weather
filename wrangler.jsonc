@@ -15,6 +15,13 @@
 			"binding": "RATE_LIMIT_KV",
 			"id": "b1cd7db589454acba664fbdc5ba9c8e9"
 		}
+	],
+	"secrets_store_bindings": [
+		{
+			"binding": "WEATHER_API_KEY",
+			"store_id": "024d333390bd48b49f824d53869b8ca7",
+			"secret_name": "WEATHER_API_KEY"
+		}
 	]
 	/**
 	 * Smart Placement

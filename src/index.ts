@@ -1,5 +1,5 @@
 export interface Env {
-  WEATHER_API_KEY: string
+  WEATHER_API_KEY: { get(): Promise<string> }
   RATE_LIMIT_KV: KVNamespace
 }
 
@@ -75,11 +75,27 @@ export default {
     try {
       console.log(`[请求开始] IP: ${ip}, Path: ${url.pathname}, Query: ${url.search}`)
 
-      // 检查必要的环境变量
-      if (!env.WEATHER_API_KEY) {
-        console.error('[配置错误] WEATHER_API_KEY 未设置')
+      // 从 Secrets Store 获取 API Key
+      let apiKey: string
+      try {
+        apiKey = await env.WEATHER_API_KEY.get()
+        if (!apiKey) {
+          console.error('[配置错误] WEATHER_API_KEY 为空')
+          return new Response(JSON.stringify({
+            error: '服务器配置错误：API Key 为空'
+          }), {
+            status: 500,
+            headers: {
+              ...getCorsHeaders(origin),
+              'Content-Type': 'application/json'
+            }
+          })
+        }
+      } catch (err) {
+        console.error('[配置错误] 无法获取 WEATHER_API_KEY:', err)
         return new Response(JSON.stringify({
-          error: '服务器配置错误：缺少 API Key'
+          error: '服务器配置错误：无法获取 API Key',
+          message: err instanceof Error ? err.message : String(err)
         }), {
           status: 500,
           headers: {
@@ -118,7 +134,7 @@ export default {
       console.log(`[查询天气] 城市: ${city}, 剩余次数: ${remaining}`)
 
       // OpenWeatherMap API URL
-      const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${env.WEATHER_API_KEY}&units=metric&lang=zh_cn`
+      const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=zh_cn`
 
       const resp = await fetch(apiUrl)
       if (!resp.ok) {

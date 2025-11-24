@@ -1,5 +1,5 @@
 export interface Env {
-  WEATHER_API_KEY: { get(): Promise<string> }
+  WEATHER_API_KEY: string | { get(): Promise<string> }
   RATE_LIMIT_KV: KVNamespace
 }
 
@@ -78,7 +78,45 @@ export default {
       // 从 Secrets Store 获取 API Key
       let apiKey: string
       try {
-        apiKey = await env.WEATHER_API_KEY.get()
+        // 检查 env.WEATHER_API_KEY 是否存在
+        if (!env.WEATHER_API_KEY) {
+          console.error('[配置错误] env.WEATHER_API_KEY 未定义')
+          console.error('[诊断] env 对象键:', Object.keys(env))
+          return new Response(JSON.stringify({
+            error: '服务器配置错误：Secrets Store 绑定未配置',
+            hint: '请在 Cloudflare Dashboard 中配置 Secrets Store 绑定，或检查 wrangler.jsonc 配置'
+          }), {
+            status: 500,
+            headers: {
+              ...getCorsHeaders(origin),
+              'Content-Type': 'application/json'
+            }
+          })
+        }
+
+        // 检查是否有 get 方法
+        if (typeof env.WEATHER_API_KEY.get !== 'function') {
+          // 如果直接是字符串，直接使用
+          if (typeof env.WEATHER_API_KEY === 'string') {
+            apiKey = env.WEATHER_API_KEY
+          } else {
+            console.error('[配置错误] env.WEATHER_API_KEY 类型不正确:', typeof env.WEATHER_API_KEY)
+            return new Response(JSON.stringify({
+              error: '服务器配置错误：Secrets Store 绑定类型不正确',
+              type: typeof env.WEATHER_API_KEY
+            }), {
+              status: 500,
+              headers: {
+                ...getCorsHeaders(origin),
+                'Content-Type': 'application/json'
+              }
+            })
+          }
+        } else {
+          // 使用 get() 方法获取
+          apiKey = await env.WEATHER_API_KEY.get()
+        }
+
         if (!apiKey) {
           console.error('[配置错误] WEATHER_API_KEY 为空')
           return new Response(JSON.stringify({

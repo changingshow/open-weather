@@ -12,25 +12,25 @@ function getClientIP(request: Request): string {
   return request.headers.get('CF-Connecting-IP') || 'unknown'
 }
 
-// 检查并更新请求次数
-async function checkRateLimit(ip: string, kv: KVNamespace): Promise<{ allowed: boolean; remaining: number }> {
-  const key = `rate_limit:${ip}`
-  const now = Math.floor(Date.now() / 1000)
-  const windowKey = Math.floor(now / RATE_LIMIT_WINDOW)
-  const fullKey = `${key}:${windowKey}`
+// 检查并更新请求次数（当前已禁用）
+// async function checkRateLimit(ip: string, kv: KVNamespace): Promise<{ allowed: boolean; remaining: number }> {
+//   const key = `rate_limit:${ip}`
+//   const now = Math.floor(Date.now() / 1000)
+//   const windowKey = Math.floor(now / RATE_LIMIT_WINDOW)
+//   const fullKey = `${key}:${windowKey}`
 
-  const current = await kv.get(fullKey)
-  const count = current ? parseInt(current, 10) : 0
+//   const current = await kv.get(fullKey)
+//   const count = current ? parseInt(current, 10) : 0
 
-  if (count >= RATE_LIMIT) {
-    return { allowed: false, remaining: 0 }
-  }
+//   if (count >= RATE_LIMIT) {
+//     return { allowed: false, remaining: 0 }
+//   }
 
-  // 更新计数，设置过期时间为窗口时间
-  await kv.put(fullKey, String(count + 1), { expirationTtl: RATE_LIMIT_WINDOW })
+//   // 更新计数，设置过期时间为窗口时间
+//   await kv.put(fullKey, String(count + 1), { expirationTtl: RATE_LIMIT_WINDOW })
 
-  return { allowed: true, remaining: RATE_LIMIT - count - 1 }
-}
+//   return { allowed: true, remaining: RATE_LIMIT - count - 1 }
+// }
 
 // CORS 头部配置
 function getCorsHeaders(origin: string | null): Record<string, string> {
@@ -95,26 +95,24 @@ export default {
         }
 
         // 检查是否有 get 方法
-        if (typeof env.WEATHER_API_KEY.get !== 'function') {
+        if (typeof env.WEATHER_API_KEY === 'string') {
           // 如果直接是字符串，直接使用
-          if (typeof env.WEATHER_API_KEY === 'string') {
-            apiKey = env.WEATHER_API_KEY
-          } else {
-            console.error('[配置错误] env.WEATHER_API_KEY 类型不正确:', typeof env.WEATHER_API_KEY)
-            return new Response(JSON.stringify({
-              error: '服务器配置错误：Secrets Store 绑定类型不正确',
-              type: typeof env.WEATHER_API_KEY
-            }), {
-              status: 500,
-              headers: {
-                ...getCorsHeaders(origin),
-                'Content-Type': 'application/json'
-              }
-            })
-          }
-        } else {
-          // 使用 get() 方法获取
+          apiKey = env.WEATHER_API_KEY
+        } else if (typeof env.WEATHER_API_KEY === 'object' && env.WEATHER_API_KEY !== null && 'get' in env.WEATHER_API_KEY && typeof env.WEATHER_API_KEY.get === 'function') {
+          // 使用 get() 方法获取（Secrets Store 绑定）
           apiKey = await env.WEATHER_API_KEY.get()
+        } else {
+          console.error('[配置错误] env.WEATHER_API_KEY 类型不正确:', typeof env.WEATHER_API_KEY)
+          return new Response(JSON.stringify({
+            error: '服务器配置错误：Secrets Store 绑定类型不正确',
+            type: typeof env.WEATHER_API_KEY
+          }), {
+            status: 500,
+            headers: {
+              ...getCorsHeaders(origin),
+              'Content-Type': 'application/json'
+            }
+          })
         }
 
         if (!apiKey) {

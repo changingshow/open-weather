@@ -1,6 +1,6 @@
 export interface Env {
   WEATHER_API_KEY: string | { get(): Promise<string> }
-  RATE_LIMIT_KV: KVNamespace
+  // RATE_LIMIT_KV: KVNamespace
 }
 
 // 限流配置
@@ -144,12 +144,13 @@ export default {
       }
 
       // 测试 KV 读取
-      const testValue = await env.RATE_LIMIT_KV.get('abc')
-      console.log(`[KV测试] key=abc, value=${testValue}`)
+      // const testValue = await env.RATE_LIMIT_KV.get('abc')
+      // console.log(`[KV测试] key=abc, value=${testValue}`)
 
       // 检查限流
-      const { allowed, remaining } = await checkRateLimit(ip, env.RATE_LIMIT_KV)
-
+      // const { allowed, remaining } = await checkRateLimit(ip, env.RATE_LIMIT_KV)
+      const allowed = true
+      const remaining = 100
       if (!allowed) {
         console.warn(`[限流触发] IP: ${ip} 已被限流`)
         const corsHeaders = getCorsHeaders(origin)

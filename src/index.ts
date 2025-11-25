@@ -72,6 +72,21 @@ export default {
       })
     }
 
+    // 只处理根路径，其他路径返回 404
+    if (url.pathname !== '/') {
+      console.log(`[404] 路径不存在: ${url.pathname}`)
+      return new Response(JSON.stringify({
+        error: 'Not Found',
+        message: `路径 ${url.pathname} 不存在`
+      }), {
+        status: 404,
+        headers: {
+          ...getCorsHeaders(origin),
+          'Content-Type': 'application/json'
+        }
+      })
+    }
+
     try {
       console.log(`[请求开始] IP: ${ip}, Path: ${url.pathname}, Query: ${url.search}`)
 
